@@ -1,0 +1,16 @@
+A music reactive visualizer program, that controls an WLED strip in loop shape over wifi:
+
+
+live audio input similar to ledfx
+
+A live website interface
+
+I would like be able to set certain zones by position/pecentage of length (i.e. 25%-50%)
+- each zone can independently be set to react differently (with a custom input range i.e. lows, highs, mids, (default all))
+Types of reactions:
+- normal visualizer
+- flash to spike in vol (can customize threshold, or be auto)
+- change color to spike in vol
+- constant moving pattern that gets faster based on volume/spike
+
+Feel free to suggest changes to this approach if apropriate

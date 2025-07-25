@@ -1,0 +1,78 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# CircLights specific
+logs/
+*.log
+configs/backups/
+music/
+temp/
+
+# Configuration files (except examples)
+configs/*.yaml
+configs/*.json
+!configs/example_*.yaml
+!configs/example_*.json
+
+# User presets (keep built-in ones)
+configs/presets/custom_*.yaml
+configs/presets/custom_*.json
+configs/presets/user_*.yaml
+configs/presets/user_*.json
+
+# Audio files
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.ogg
+
+# Temporary files
+*.tmp
+*.temp
+.cache/

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CircLights - Music Reactive LED Controller</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CircLights</h1>
+            <p>Music Reactive LED Visualizer</p>
+            <div class="status-bar">
+                <span id="connection-status" class="status-disconnected">Connecting...</span>
+                <span id="fps-display">FPS: --</span>
+            </div>
+        </header>
+
+        <main>
+            <!-- Audio Controls -->
+            <section class="panel">
+                <h2>Audio Input</h2>
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="audio-source">Input Source:</label>
+                        <select id="audio-source">
+                            <option value="system">System Audio</option>
+                            <option value="microphone">Microphone</option>
+                            <option value="mp3">MP3 File</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group" id="device-selection">
+                        <label for="audio-device">Device:</label>
+                        <select id="audio-device">
+                            <option value="">Loading devices...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group" id="mp3-controls" style="display: none;">
+                        <label for="mp3-file">MP3 File:</label>
+                        <input type="file" id="mp3-file" accept=".mp3,.wav,.flac">
+                        <div class="mp3-player">
+                            <button id="mp3-play">Play</button>
+                            <button id="mp3-pause">Pause</button>
+                            <button id="mp3-stop">Stop</button>
+                            <input type="range" id="mp3-seek" min="0" max="100" value="0">
+                            <span id="mp3-time">0:00 / 0:00</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Audio Visualizer -->
+                <div class="audio-visualizer">
+                    <canvas id="audio-canvas" width="400" height="100"></canvas>
+                    <div class="frequency-bars">
+                        <div class="freq-bar">
+                            <label>Bass</label>
+                            <div class="bar-container">
+                                <div id="bass-bar" class="frequency-bar"></div>
+                            </div>
+                        </div>
+                        <div class="freq-bar">
+                            <label>Mids</label>
+                            <div class="bar-container">
+                                <div id="mids-bar" class="frequency-bar"></div>
+                            </div>
+                        </div>
+                        <div class="freq-bar">
+                            <label>Highs</label>
+                            <div class="bar-container">
+                                <div id="highs-bar" class="frequency-bar"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- LED Controls -->
+            <section class="panel">
+                <h2>LED Configuration</h2>
+                <div class="controls-grid">
+                    <div class="control-group">
+                        <label for="led-count">LED Count:</label>
+                        <input type="number" id="led-count" min="1" max="1000" value="30">
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="brightness">Brightness:</label>
+                        <input type="range" id="brightness" min="0" max="255" value="255">
+                        <span id="brightness-value">255</span>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="wled-ip">WLED IP:</label>
+                        <input type="text" id="wled-ip" placeholder="192.168.1.100">
+                    </div>
+                    
+                    <div class="control-group">
+                        <button id="test-rainbow">Test Rainbow</button>
+                        <button id="test-white">Test White</button>
+                        <button id="test-off">Turn Off</button>
+                    </div>
+                </div>
+                
+                <!-- LED Strip Visualizer -->
+                <div class="led-strip-viz">
+                    <canvas id="led-strip-canvas" width="600" height="60"></canvas>
+                </div>
+            </section>
+
+            <!-- Zone Management -->
+            <section class="panel">
+                <h2>Zone Management</h2>
+                <div class="zone-controls">
+                    <button id="add-zone">Add Zone</button>
+                    <button id="clear-zones">Clear All Zones</button>
+                </div>
+                
+                <div id="zones-container">
+                    <!-- Zones will be dynamically added here -->
+                </div>
+                
+                <!-- Add Zone Modal -->
+                <div id="add-zone-modal" class="modal" style="display: none;">
+                    <div class="modal-content">
+                        <h3>Add New Zone</h3>
+                        <div class="form-group">
+                            <label for="zone-name">Name:</label>
+                            <input type="text" id="zone-name" placeholder="Zone Name">
+                        </div>
+                        <div class="form-group">
+                            <label for="zone-start">Start (%):</label>
+                            <input type="number" id="zone-start" min="0" max="100" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="zone-end">End (%):</label>
+                            <input type="number" id="zone-end" min="0" max="100" value="100">
+                        </div>
+                        <div class="form-group">
+                            <label for="zone-frequency">Frequency Range:</label>
+                            <select id="zone-frequency">
+                                <option value="all">All</option>
+                                <option value="bass">Bass</option>
+                                <option value="mids">Mids</option>
+                                <option value="highs">Highs</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="zone-effect">Effect Type:</label>
+                            <select id="zone-effect">
+                                <option value="spectrum">Spectrum</option>
+                                <option value="flash">Flash</option>
+                                <option value="color_change">Color Change</option>
+                                <option value="moving">Moving Pattern</option>
+                                <option value="solid">Solid Color</option>
+                                <option value="gradient">Gradient</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="zone-sensitivity">Sensitivity:</label>
+                            <input type="range" id="zone-sensitivity" min="0.1" max="5" step="0.1" value="1">
+                            <span id="zone-sensitivity-value">1.0</span>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="save-zone">Save Zone</button>
+                            <button id="cancel-zone">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Presets -->
+            <section class="panel">
+                <h2>Presets</h2>
+                <div class="preset-controls">
+                    <select id="preset-list">
+                        <option value="">Select Preset...</option>
+                    </select>
+                    <button id="load-preset">Load</button>
+                    <input type="text" id="new-preset-name" placeholder="New preset name">
+                    <button id="save-preset">Save</button>
+                </div>
+            </section>
+
+            <!-- Performance Stats -->
+            <section class="panel">
+                <h2>Performance</h2>
+                <div class="stats-grid">
+                    <div class="stat">
+                        <label>LED FPS:</label>
+                        <span id="led-fps">--</span>
+                    </div>
+                    <div class="stat">
+                        <label>Audio RMS:</label>
+                        <span id="audio-rms">--</span>
+                    </div>
+                    <div class="stat">
+                        <label>WLED Status:</label>
+                        <span id="wled-status">--</span>
+                    </div>
+                    <div class="stat">
+                        <label>Active Zones:</label>
+                        <span id="active-zones">--</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

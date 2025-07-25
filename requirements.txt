@@ -1,0 +1,30 @@
+# Audio Processing
+pyaudio==0.2.11
+librosa==0.10.1
+numpy==1.24.3
+scipy==1.11.2
+
+# Beat Detection & Advanced Audio Analysis
+aubio==0.4.9
+madmom==0.16.1
+
+# Web Interface
+flask==2.3.3
+flask-socketio==5.3.6
+eventlet==0.33.3
+
+# WLED Communication
+requests==2.31.0
+zeroconf==0.112.0  # For WLED auto-discovery
+
+# Configuration & Utilities
+pyyaml==6.0.1
+colorama==0.4.6  # Cross-platform colored terminal output
+
+# Cross-platform Audio (Windows/Linux compatibility)
+sounddevice==0.4.6  # Alternative to pyaudio with better cross-platform support
+
+# Development & Testing
+pytest==7.4.2
+black==23.7.0
+flake8==6.1.0
