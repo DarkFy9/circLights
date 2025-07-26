@@ -97,6 +97,8 @@
                     <div class="control-group">
                         <label for="wled-ip">WLED IP:</label>
                         <input type="text" id="wled-ip" placeholder="192.168.1.100">
+                        <button id="test-wled-connection" type="button">Test Connection</button>
+                        <span id="wled-connection-status" class="connection-status"></span>
                     </div>
                     
                     <div class="control-group">
@@ -206,6 +208,15 @@
                         <label>Active Zones:</label>
                         <span id="active-zones">--</span>
                     </div>
+                </div>
+            </section>
+
+            <!-- System Controls -->
+            <section class="panel">
+                <h2>System</h2>
+                <div class="system-controls">
+                    <button id="safe-shutdown" class="shutdown-btn">Safe Shutdown</button>
+                    <p class="shutdown-warning">This will gracefully stop CircLights and save all settings.</p>
                 </div>
             </section>
         </main>

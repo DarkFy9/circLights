@@ -168,6 +168,22 @@ class WebServer:
                 
             return jsonify({'success': True})
             
+        @self.app.route('/api/led/test-connection', methods=['POST'])
+        def test_wled_connection():
+            """Test connection to WLED device"""
+            data = request.get_json()
+            wled_ip = data.get('wled_ip', '')
+            
+            if not wled_ip:
+                return jsonify({'success': False, 'error': 'No IP address provided'})
+                
+            try:
+                # Test connection synchronously using requests
+                result = self._test_wled_connection_sync(wled_ip)
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)})
+            
         @self.app.route('/api/zones', methods=['GET'])
         def get_zones():
             """Get all zones"""
@@ -247,11 +263,28 @@ class WebServer:
             success = asyncio.run(self.config_manager.save_preset(preset_name))
             return jsonify({'success': success})
             
+        @self.app.route('/api/system/shutdown', methods=['POST'])
+        def shutdown_system():
+            """Safe shutdown of the system"""
+            logger.info("Safe shutdown requested from web interface")
+            
+            # Trigger shutdown in a separate thread to allow response to be sent
+            def trigger_shutdown():
+                import time
+                time.sleep(0.5)  # Allow response to be sent
+                import os
+                os.kill(os.getpid(), 2)  # Send SIGINT to self
+                
+            import threading
+            threading.Thread(target=trigger_shutdown, daemon=True).start()
+            
+            return jsonify({'success': True, 'message': 'Shutdown initiated'})
+            
     def _setup_socketio_events(self):
         """Setup SocketIO event handlers"""
         
         @self.socketio.on('connect')
-        def handle_connect():
+        def handle_connect(auth):
             """Handle client connection"""
             self.clients.add(request.sid)
             logger.info(f"Client connected: {request.sid}")
@@ -295,7 +328,13 @@ class WebServer:
                 self._test_white_pattern()
             elif pattern == 'off':
                 self.led_controller.clear_leds()
-                asyncio.run(self.led_controller.update_leds(force=True))
+                # Schedule LED update safely
+                try:
+                    loop = asyncio.get_event_loop()
+                    if not loop.is_closed():
+                        loop.create_task(self.led_controller.update_leds(force=True))
+                except Exception as e:
+                    logger.error(f"Failed to schedule LED update: {e}")
                 
     def _get_realtime_status(self) -> Dict[str, Any]:
         """Get real-time status for web interface"""
@@ -304,11 +343,11 @@ class WebServer:
         status = {
             'timestamp': time.time(),
             'audio': {
-                'rms': features.rms if features else 0.0,
-                'peak': features.peak if features else 0.0,
-                'bass': features.bass if features else 0.0,
-                'mids': features.mids if features else 0.0,
-                'highs': features.highs if features else 0.0,
+                'rms': float(features.rms) if features else 0.0,
+                'peak': float(features.peak) if features else 0.0,
+                'bass': float(features.bass) if features else 0.0,
+                'mids': float(features.mids) if features else 0.0,
+                'highs': float(features.highs) if features else 0.0,
                 'mp3_status': self.audio_processor.get_mp3_status()
             },
             'led': {
@@ -358,7 +397,13 @@ class WebServer:
             colors.append([int(r * 255), int(g * 255), int(b * 255)])
             
         self.led_controller.set_all_leds(np.array(colors))
-        asyncio.run(self.led_controller.update_leds(force=True))
+        # Schedule LED update safely
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                loop.create_task(self.led_controller.update_leds(force=True))
+        except Exception as e:
+            logger.error(f"Failed to schedule rainbow LED update: {e}")
         
     def _test_white_pattern(self):
         """Test with white pattern"""
@@ -366,7 +411,13 @@ class WebServer:
         
         colors = np.full((self.led_controller.led_count, 3), 255, dtype=np.uint8)
         self.led_controller.set_all_leds(colors)
-        asyncio.run(self.led_controller.update_leds(force=True))
+        # Schedule LED update safely
+        try:
+            loop = asyncio.get_event_loop()
+            if not loop.is_closed():
+                loop.create_task(self.led_controller.update_leds(force=True))
+        except Exception as e:
+            logger.error(f"Failed to schedule white LED update: {e}")
         
     async def _realtime_update_loop(self):
         """Real-time update loop for web clients"""
@@ -409,13 +460,13 @@ class WebServer:
             self.update_task = asyncio.create_task(self._realtime_update_loop())
             
             # Start Flask-SocketIO server
-            host = config.web.host if config else "0.0.0.0"
+            host = config.web.host if config else "127.0.0.1"
             port = config.web.port if config else 8080
             
             logger.info(f"Starting web server on http://{host}:{port}")
             
-            # Run in separate thread to avoid blocking
-            self.socketio.run(self.app, host=host, port=port, debug=False)
+            # Run SocketIO server (blocks until shutdown)
+            self.socketio.run(self.app, host=host, port=port, debug=False, use_reloader=False)
             
         except Exception as e:
             logger.error(f"Failed to start WebServer: {e}")
@@ -469,3 +520,73 @@ class WebServer:
     def get_socketio(self):
         """Get SocketIO instance for testing"""
         return self.socketio
+        
+    def _test_wled_connection_sync(self, wled_ip: str):
+        """Test connection to WLED device synchronously"""
+        try:
+            import requests
+            
+            # Clean and validate IP format
+            wled_ip = wled_ip.strip()
+            if wled_ip.startswith('http://'):
+                wled_ip = wled_ip[7:]
+            if wled_ip.startswith('https://'):
+                wled_ip = wled_ip[8:]
+            if wled_ip.startswith('//'):
+                wled_ip = wled_ip[2:]
+                
+            # Remove any trailing slashes
+            wled_ip = wled_ip.rstrip('/')
+            
+            # Validate IP format (basic check)
+            if not wled_ip or '.' not in wled_ip:
+                return {'success': False, 'error': 'Invalid IP address format'}
+                
+            # Test basic connectivity
+            info_url = f"http://{wled_ip}/json/info"
+            logger.info(f"Testing WLED connection to: {info_url}")
+            response = requests.get(info_url, timeout=5)
+            
+            if response.status_code == 200:
+                info_data = response.json()
+                
+                # Get state information
+                state_url = f"http://{wled_ip}/json/state"
+                state_response = requests.get(state_url, timeout=5)
+                
+                if state_response.status_code == 200:
+                    state_data = state_response.json()
+                    
+                    # Add/update device in LED controller
+                    device_name = info_data.get('name', f'WLED-{wled_ip}')
+                    led_count = info_data.get('leds', {}).get('count', 30)
+                    
+                    # Add device to controller
+                    self.led_controller.add_device(device_name, wled_ip, 80, led_count)
+                    
+                    # Mark device as online (sync version)
+                    for device in self.led_controller.devices:
+                        if device.ip == wled_ip:
+                            device.online = True
+                            break
+                    
+                    return {
+                        'success': True,
+                        'device_info': {
+                            'name': device_name,
+                            'version': info_data.get('ver', 'Unknown'),
+                            'led_count': led_count,
+                            'ip': wled_ip,
+                            'mac': info_data.get('mac', ''),
+                            'online': True
+                        }
+                    }
+                else:
+                    return {'success': False, 'error': f'Could not get device state (HTTP {state_response.status_code})'}
+            else:
+                return {'success': False, 'error': f'HTTP {response.status_code}: Could not connect to WLED device'}
+                
+        except requests.exceptions.RequestException as e:
+            return {'success': False, 'error': f'Connection failed: {str(e)}'}
+        except Exception as e:
+            return {'success': False, 'error': f'Unexpected error: {str(e)}'}

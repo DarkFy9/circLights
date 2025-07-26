@@ -57,6 +57,7 @@ class LEDController:
         # Network
         self.session: Optional[aiohttp.ClientSession] = None
         self.discovery_service = None
+        self.udp_socket = None
         
         # LED data
         self.led_data = np.zeros((self.led_count, 3), dtype=np.uint8)  # RGB
@@ -83,9 +84,14 @@ class LEDController:
         logger.info("Starting LEDController...")
         
         try:
-            # Create HTTP session
-            timeout = aiohttp.ClientTimeout(total=1.0)  # Fast timeout for LED updates
+            # Create HTTP session for device discovery/config
+            timeout = aiohttp.ClientTimeout(total=5.0)  # Longer timeout for discovery
             self.session = aiohttp.ClientSession(timeout=timeout)
+            
+            # Create UDP socket for LED data transmission
+            import socket
+            self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             
             # Start device discovery
             await self._start_discovery()
@@ -108,13 +114,18 @@ class LEDController:
         logger.info("Stopping LEDController...")
         self.running = False
         
-        # Stop discovery
-        if self.discovery_service:
-            self.discovery_service.cancel()
-            
         # Close HTTP session
         if self.session:
             await self.session.close()
+            
+        # Close UDP socket
+        if self.udp_socket:
+            self.udp_socket.close()
+            self.udp_socket = None
+            
+        # Stop discovery
+        if self.discovery_service:
+            self.discovery_service.cancel()
             self.session = None
             
         logger.info("LEDController stopped")
@@ -212,6 +223,25 @@ class LEDController:
             self.primary_device = device
             
         logger.info(f"Added WLED device: {name} at {ip}")
+        
+    async def _test_device_connectivity(self, device_ip: str):
+        """Test connectivity to a WLED device and mark it online"""
+        for device in self.devices:
+            if device.ip == device_ip:
+                try:
+                    if self.session:
+                        url = f"http://{device.ip}:{device.port}/json/info"
+                        async with self.session.get(url) as response:
+                            if response.status == 200:
+                                device.online = True
+                                logger.info(f"Device {device.name} is online")
+                                return True
+                except Exception as e:
+                    logger.warning(f"Device {device.name} connectivity test failed: {e}")
+                
+                device.online = False
+                return False
+        return False
         
     def set_primary_device(self, device_ip: str):
         """Set primary WLED device by IP"""
@@ -327,44 +357,20 @@ class LEDController:
                 # Apply brightness
                 adjusted_data = (self.led_data * (self.brightness / 255)).astype(np.uint8)
                 
-                # Convert to WLED format
-                led_array = []
-                for r, g, b in adjusted_data:
-                    led_array.extend([r, g, b])
+                # Send LED data via UDP (much faster than HTTP)
+                success = await self._send_udp_data(adjusted_data)
+                
+                if success:
+                    self.last_update_time = current_time
                     
-                # Send to WLED
-                payload = {
-                    "on": True,
-                    "bri": self.brightness,
-                    "seg": [{
-                        "id": 0,
-                        "start": 0,
-                        "stop": self.led_count,
-                        "col": [[255, 255, 255]],  # Will be overridden by individual data
-                        "fx": 0,  # Solid color effect
-                        "sx": 128,
-                        "ix": 128
-                    }]
-                }
-                
-                url = f"http://{self.primary_device.ip}:{self.primary_device.port}/json/state"
-                
-                # Send state update
-                async with self.session.post(url, json=payload) as response:
-                    if response.status == 200:
-                        # Send LED data via UDP for better performance
-                        await self._send_udp_data(adjusted_data)
+                    # Track performance
+                    self.frame_times.append(current_time)
+                    if len(self.frame_times) > 100:
+                        self.frame_times.pop(0)
                         
-                        self.last_update_time = current_time
-                        
-                        # Track performance
-                        self.frame_times.append(current_time)
-                        if len(self.frame_times) > 100:
-                            self.frame_times.pop(0)
-                            
-                        return True
-                    else:
-                        logger.warning(f"WLED update failed: HTTP {response.status}")
+                    return True
+                else:
+                    logger.warning(f"WLED UDP update failed")
                         
             except Exception as e:
                 logger.error(f"Error updating LEDs: {e}")
@@ -374,24 +380,35 @@ class LEDController:
         
     async def _send_udp_data(self, led_data: np.ndarray):
         """Send LED data via UDP for high performance"""
+        if not self.primary_device or not self.udp_socket:
+            return False
+            
         try:
             # WLED UDP protocol: [WARLS][timeout][start_index][data...]
-            # We'll use a simplified approach for now
             udp_data = bytearray()
             udp_data.extend(b'WARLS')  # Protocol identifier
             udp_data.append(2)  # Timeout in seconds
-            udp_data.extend((0).to_bytes(2, 'big'))  # Start index
+            udp_data.extend((0).to_bytes(2, 'big'))  # Start index (16-bit big endian)
             
-            # Add LED data
+            # Add LED data (RGB format)
             for r, g, b in led_data:
                 udp_data.extend([r, g, b])
-                
-            # Send UDP packet (implement if needed for performance)
-            # For now, rely on HTTP API
-            pass
+            
+            # Send UDP packet
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: self.udp_socket.sendto(
+                    udp_data, 
+                    (self.primary_device.ip, 21324)  # WLED UDP port
+                )
+            )
+            
+            logger.debug(f"Sent {len(udp_data)} bytes via UDP to {self.primary_device.ip}")
+            return True
             
         except Exception as e:
-            logger.debug(f"UDP send error: {e}")
+            logger.error(f"UDP send error: {e}")
+            return False
             
     def get_performance_stats(self) -> Dict[str, float]:
         """Get performance statistics"""

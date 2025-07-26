@@ -1,0 +1,86 @@
+{
+  "audio": {
+    "sample_rate": 44100,
+    "buffer_size": 4096,
+    "enable_beat_detection": false
+  },
+  "led": {
+    "led_count": 30,
+    "brightness": 180,
+    "update_rate": 30
+  },
+  "zones": [
+    {
+      "name": "Rainbow Wave",
+      "start_percent": 0.0,
+      "end_percent": 1.0,
+      "frequency_range": "all",
+      "effect_type": "gradient",
+      "sensitivity": 0.3,
+      "custom_params": {
+        "colors": [
+          [
+            255,
+            0,
+            0
+          ],
+          [
+            255,
+            127,
+            0
+          ],
+          [
+            255,
+            255,
+            0
+          ],
+          [
+            0,
+            255,
+            0
+          ],
+          [
+            0,
+            0,
+            255
+          ],
+          [
+            75,
+            0,
+            130
+          ],
+          [
+            148,
+            0,
+            211
+          ]
+        ]
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "Rainbow",
+      "type": "rainbow",
+      "enabled": true,
+      "parameters": {
+        "speed": 0.5,
+        "density": 1.0,
+        "audio_reactive": true
+      }
+    }
+  ],
+  "_metadata": {
+    "name": "Ambient Rainbow",
+    "description": "Smooth rainbow with subtle audio reactivity",
+    "author": "CircLights",
+    "version": "1.0",
+    "tags": [
+      "ambient",
+      "rainbow",
+      "smooth",
+      "relaxing"
+    ],
+    "created_at": ""
+  }
+}

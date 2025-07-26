@@ -111,6 +111,9 @@ class CircLightsApp {
         document.getElementById('test-white')?.addEventListener('click', () => this.testLEDs('white'));
         document.getElementById('test-off')?.addEventListener('click', () => this.testLEDs('off'));
         
+        // WLED connection test
+        document.getElementById('test-wled-connection')?.addEventListener('click', this.testWLEDConnection.bind(this));
+        
         // Zone management
         document.getElementById('add-zone')?.addEventListener('click', this.showAddZoneModal.bind(this));
         document.getElementById('clear-zones')?.addEventListener('click', this.clearAllZones.bind(this));
@@ -128,6 +131,9 @@ class CircLightsApp {
         // Preset controls
         document.getElementById('load-preset')?.addEventListener('click', this.loadPreset.bind(this));
         document.getElementById('save-preset')?.addEventListener('click', this.savePreset.bind(this));
+        
+        // System controls
+        document.getElementById('safe-shutdown')?.addEventListener('click', this.safeShutdown.bind(this));
         
         // Window resize
         window.addEventListener('resize', this.handleResize.bind(this));
@@ -765,6 +771,80 @@ class CircLightsApp {
             }
         } catch (error) {
             console.error('Error saving preset:', error);
+        }
+    }
+    
+    async safeShutdown() {
+        if (!confirm('Are you sure you want to shutdown CircLights? This will stop the entire system.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/system/shutdown', {
+                method: 'POST'
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                alert('Shutdown initiated. CircLights will stop shortly.');
+                // Update UI to show shutdown in progress
+                this.updateConnectionStatus('Shutting down...', false);
+            }
+        } catch (error) {
+            console.error('Error initiating shutdown:', error);
+            alert('Failed to initiate shutdown. You may need to stop the program manually.');
+        }
+    }
+    
+    async testWLEDConnection() {
+        const wledIP = document.getElementById('wled-ip').value;
+        const statusElement = document.getElementById('wled-connection-status');
+        const button = document.getElementById('test-wled-connection');
+        
+        if (!wledIP) {
+            statusElement.textContent = 'Please enter an IP address';
+            statusElement.className = 'connection-status error';
+            return;
+        }
+        
+        // Update UI to show testing
+        button.disabled = true;
+        button.textContent = 'Testing...';
+        statusElement.textContent = 'Testing connection...';
+        statusElement.className = 'connection-status testing';
+        
+        try {
+            const response = await fetch('/api/led/test-connection', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wled_ip: wledIP })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                const device = result.device_info;
+                statusElement.innerHTML = `✓ Connected: ${device.name} (${device.led_count} LEDs, v${device.version})`;
+                statusElement.className = 'connection-status success';
+                
+                // Update LED count if returned by device
+                const ledCountInput = document.getElementById('led-count');
+                if (ledCountInput && device.led_count) {
+                    ledCountInput.value = device.led_count;
+                }
+            } else {
+                statusElement.textContent = `✗ Failed: ${result.error}`;
+                statusElement.className = 'connection-status error';
+            }
+            
+        } catch (error) {
+            console.error('Error testing WLED connection:', error);
+            statusElement.textContent = '✗ Connection test failed';
+            statusElement.className = 'connection-status error';
+        } finally {
+            // Reset button
+            button.disabled = false;
+            button.textContent = 'Test Connection';
         }
     }
     

@@ -1,0 +1,70 @@
+{
+  "audio": {
+    "sample_rate": 44100,
+    "buffer_size": 1024,
+    "enable_beat_detection": true
+  },
+  "led": {
+    "led_count": 30,
+    "brightness": 255,
+    "update_rate": 60
+  },
+  "zones": [
+    {
+      "name": "Beat Flash",
+      "start_percent": 0.0,
+      "end_percent": 1.0,
+      "frequency_range": "bass",
+      "effect_type": "flash",
+      "sensitivity": 1.5,
+      "custom_params": {
+        "threshold": 0.6,
+        "color": [
+          255,
+          255,
+          255
+        ],
+        "decay_time": 0.2
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "Beat Flash",
+      "type": "beat_flash",
+      "enabled": true,
+      "parameters": {
+        "flash_color": [
+          255,
+          0,
+          100
+        ],
+        "flash_duration": 0.15,
+        "min_confidence": 0.7
+      }
+    },
+    {
+      "name": "Strobe",
+      "type": "strobe",
+      "enabled": false,
+      "parameters": {
+        "strobe_rate": 12.0,
+        "beat_sync": true,
+        "duty_cycle": 0.1
+      }
+    }
+  ],
+  "_metadata": {
+    "name": "Beat Party",
+    "description": "High-energy beat-reactive effects",
+    "author": "CircLights",
+    "version": "1.0",
+    "tags": [
+      "party",
+      "beats",
+      "flash",
+      "energy"
+    ],
+    "created_at": ""
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "audio": {
+    "sample_rate": 44100,
+    "buffer_size": 2048,
+    "enable_beat_detection": true
+  },
+  "led": {
+    "led_count": 30,
+    "brightness": 255,
+    "update_rate": 60
+  },
+  "zones": [
+    {
+      "name": "Fire Base",
+      "start_percent": 0.0,
+      "end_percent": 1.0,
+      "frequency_range": "bass",
+      "effect_type": "solid",
+      "sensitivity": 2.0,
+      "custom_params": {
+        "color": [
+          255,
+          50,
+          0
+        ]
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "Fire",
+      "type": "fire",
+      "enabled": true,
+      "parameters": {
+        "cooling": 0.55,
+        "sparkling": 0.8,
+        "audio_intensity": true
+      }
+    }
+  ],
+  "_metadata": {
+    "name": "Fire Storm",
+    "description": "Realistic fire effect with audio intensity",
+    "author": "CircLights",
+    "version": "1.0",
+    "tags": [
+      "fire",
+      "realistic",
+      "warm",
+      "dynamic"
+    ],
+    "created_at": ""
+  }
+}

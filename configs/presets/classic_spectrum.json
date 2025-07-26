@@ -1,0 +1,52 @@
+{
+  "audio": {
+    "sample_rate": 44100,
+    "buffer_size": 2048,
+    "enable_beat_detection": true
+  },
+  "led": {
+    "led_count": 30,
+    "brightness": 255,
+    "update_rate": 60
+  },
+  "zones": [
+    {
+      "name": "Full Strip",
+      "start_percent": 0.0,
+      "end_percent": 1.0,
+      "frequency_range": "all",
+      "effect_type": "spectrum",
+      "sensitivity": 1.0,
+      "custom_params": {
+        "color_mode": "rainbow",
+        "height_scale": 2.0,
+        "smoothing": 0.3
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "Spectrum",
+      "type": "spectrum",
+      "enabled": true,
+      "parameters": {
+        "color_mode": "rainbow",
+        "height_scale": 2.0,
+        "smoothing": 0.3,
+        "mirror_mode": false
+      }
+    }
+  ],
+  "_metadata": {
+    "name": "Classic Spectrum",
+    "description": "Traditional rainbow spectrum analyzer",
+    "author": "CircLights",
+    "version": "1.0",
+    "tags": [
+      "music",
+      "spectrum",
+      "rainbow"
+    ],
+    "created_at": ""
+  }
+}

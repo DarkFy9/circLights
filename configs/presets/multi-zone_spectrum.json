@@ -1,0 +1,78 @@
+{
+  "audio": {
+    "sample_rate": 44100,
+    "buffer_size": 2048,
+    "enable_beat_detection": true
+  },
+  "led": {
+    "led_count": 30,
+    "brightness": 255,
+    "update_rate": 60
+  },
+  "zones": [
+    {
+      "name": "Bass Zone",
+      "start_percent": 0.0,
+      "end_percent": 0.33,
+      "frequency_range": "bass",
+      "effect_type": "flash",
+      "sensitivity": 2.0,
+      "custom_params": {
+        "threshold": 0.4,
+        "color": [
+          255,
+          0,
+          0
+        ],
+        "decay_time": 0.3
+      }
+    },
+    {
+      "name": "Mid Zone",
+      "start_percent": 0.33,
+      "end_percent": 0.67,
+      "frequency_range": "mids",
+      "effect_type": "spectrum",
+      "sensitivity": 1.0,
+      "custom_params": {
+        "color_mode": "energy"
+      }
+    },
+    {
+      "name": "High Zone",
+      "start_percent": 0.67,
+      "end_percent": 1.0,
+      "frequency_range": "highs",
+      "effect_type": "moving",
+      "sensitivity": 1.5,
+      "custom_params": {
+        "base_speed": 2.0,
+        "pattern_width": 2
+      }
+    }
+  ],
+  "effects": [
+    {
+      "name": "Wave",
+      "type": "wave",
+      "enabled": false,
+      "parameters": {
+        "wave_speed": 3.0,
+        "wave_width": 5,
+        "audio_modulation": true
+      }
+    }
+  ],
+  "_metadata": {
+    "name": "Multi-Zone Spectrum",
+    "description": "Different frequency zones with unique effects",
+    "author": "CircLights",
+    "version": "1.0",
+    "tags": [
+      "multizone",
+      "frequency",
+      "advanced"
+    ],
+    "created_at": ""
+  }
+}

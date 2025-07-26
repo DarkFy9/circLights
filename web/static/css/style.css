@@ -107,6 +107,12 @@ input, select, button {
     transition: all 0.3s ease;
 }
 
+select option {
+    background: #2d2d2d;
+    color: #ffffff;
+    padding: 8px;
+}
+
 input:focus, select:focus {
     outline: none;
     border-color: #4CAF50;
@@ -489,4 +495,76 @@ input[type="range"]::-moz-range-thumb {
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(76, 175, 80, 0.8);
+}
+
+/* System Controls */
+.system-controls {
+    text-align: center;
+}
+
+.shutdown-btn {
+    background: linear-gradient(45deg, #f44336, #d32f2f);
+    color: white;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.shutdown-btn:hover {
+    background: linear-gradient(45deg, #d32f2f, #f44336);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+}
+
+.shutdown-warning {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    color: #cccccc;
+    font-style: italic;
+}
+
+/* Connection Status */
+.connection-status {
+    display: block;
+    margin-top: 5px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 4px;
+    min-height: 1.2em;
+}
+
+.connection-status.success {
+    color: #4CAF50;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.connection-status.error {
+    color: #f44336;
+    background: rgba(244, 67, 54, 0.1);
+    border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.connection-status.testing {
+    color: #ff9800;
+    background: rgba(255, 152, 0, 0.1);
+    border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+#test-wled-connection {
+    margin-top: 5px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+#test-wled-connection:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }

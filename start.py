@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 async def initialize_system():
     """Initialize CircLights system with all components"""
-    logger.info("🎵 Initializing CircLights System...")
+    logger.info("Initializing CircLights System...")
     
     # Create directories
     Path("logs").mkdir(exist_ok=True)
@@ -44,17 +44,17 @@ async def initialize_system():
     Path("configs/backups").mkdir(exist_ok=True)
     
     # Initialize configuration manager
-    logger.info("📋 Loading configuration...")
+    logger.info("Loading configuration...")
     config_manager = ConfigManager()
     config = await config_manager.load_config()
     
     # Initialize preset manager and install built-ins
-    logger.info("🎨 Setting up presets...")
+    logger.info("Setting up presets...")
     preset_manager = PresetManager(config_manager)
     await preset_manager.install_builtin_presets()
     
     # Initialize audio processor
-    logger.info("🎤 Initializing audio system...")
+    logger.info("Initializing audio system...")
     audio_processor = AudioProcessor(config_manager)
     
     # Get available audio devices
@@ -64,16 +64,16 @@ async def initialize_system():
         logger.info(f"  - {device_id}: {device['name']} ({device['channels']} channels)")
     
     # Initialize LED controller
-    logger.info("💡 Initializing LED controller...")
+    logger.info("Initializing LED controller...")
     led_controller = LEDController(config_manager)
     
     # Initialize effects manager
-    logger.info("✨ Setting up effects...")
+    logger.info("Setting up effects...")
     effects_manager = EffectsManager()
     effects_manager.create_default_effects()
     
     # Initialize zone manager
-    logger.info("🎯 Setting up zones...")
+    logger.info("Setting up zones...")
     zone_manager = ZoneManager(led_count=config.led.led_count)
     if config.zones:
         zone_manager.load_zones_from_config(config.zones)
@@ -92,7 +92,7 @@ async def initialize_system():
         await config_manager.save_config()
     
     # Initialize web server
-    logger.info("🌐 Starting web interface...")
+    logger.info("Starting web interface...")
     web_server = WebServer(config_manager, audio_processor, led_controller, effects_manager)
     
     # Connect components
@@ -109,13 +109,13 @@ async def initialize_system():
         'web_server': web_server
     }
     
-    logger.info("✅ System initialization complete!")
+    logger.info("System initialization complete!")
     return components
 
 
-async def start_system(components):
+async def start_system(components, shutdown_event=None):
     """Start all system components"""
-    logger.info("🚀 Starting CircLights...")
+    logger.info("Starting CircLights...")
     
     config = components['config_manager'].get_config()
     
@@ -129,7 +129,7 @@ async def start_system(components):
             try:
                 # Update zones
                 dt = 1.0 / 60.0
-                components['zone_manager'].update_all_zones(features, None, dt)
+                components['zone_manager'].update_all_zones(features, dt)
                 
                 # Get combined colors from zones
                 zone_colors = components['zone_manager'].get_combined_colors()
@@ -139,19 +139,36 @@ async def start_system(components):
                 
                 # Send to LED controller (zones take priority)
                 components['led_controller'].set_all_leds(zone_colors)
-                asyncio.create_task(components['led_controller'].update_leds())
+                # Schedule LED update without awaiting to avoid blocking audio callback
+                loop = asyncio.get_event_loop()
+                if not loop.is_closed():
+                    loop.create_task(components['led_controller'].update_leds())
                 
             except Exception as e:
                 logger.error(f"Audio callback error: {e}")
         
         components['audio_processor'].add_feature_callback(audio_callback)
         
-        # Start web server (this will block)
-        logger.info(f"🌐 Web interface available at http://{config.web.host}:{config.web.port}")
-        logger.info("📱 Open the web interface to control CircLights!")
-        logger.info("🎵 System ready - enjoy your music visualization!")
+        # Start web server 
+        logger.info(f"Web interface available at http://{config.web.host}:{config.web.port}")
+        logger.info("Open the web interface to control CircLights!")
+        logger.info("System ready - enjoy your music visualization!")
         
-        await components['web_server'].start()
+        if shutdown_event:
+            # Start web server and wait for shutdown
+            web_task = asyncio.create_task(components['web_server'].start())
+            shutdown_task = asyncio.create_task(shutdown_event.wait())
+            
+            done, pending = await asyncio.wait(
+                [web_task, shutdown_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            # Cancel remaining tasks
+            for task in pending:
+                task.cancel()
+        else:
+            await components['web_server'].start()
         
     except Exception as e:
         logger.error(f"Failed to start system: {e}")
@@ -175,7 +192,7 @@ async def stop_system(components):
     if 'config_manager' in components:
         await components['config_manager'].save_config()
         
-    logger.info("✅ CircLights stopped gracefully")
+    logger.info("CircLights stopped gracefully")
 
 
 def create_sample_mp3_config():
@@ -245,15 +262,45 @@ async def main():
     # Setup signal handlers for graceful shutdown
     import signal
     
+    shutdown_event = asyncio.Event()
+    
     def signal_handler(signum, frame):
-        logger.info(f"Received signal {signum}")
-        asyncio.create_task(stop_system(components))
+        logger.info(f"Received signal {signum} - shutting down gracefully...")
+        shutdown_event.set()
+        
+        # Force exit after 3 seconds if graceful shutdown doesn't work
+        def force_exit():
+            import time
+            time.sleep(3)
+            logger.warning("Force shutdown - graceful shutdown timed out")
+            import os
+            os._exit(1)
+        
+        import threading
+        threading.Thread(target=force_exit, daemon=True).start()
     
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
     try:
-        await start_system(components)
+        # Start system and wait for shutdown signal
+        start_task = asyncio.create_task(start_system(components, shutdown_event))
+        shutdown_task = asyncio.create_task(shutdown_event.wait())
+        
+        # Wait for either system completion or shutdown signal
+        done, pending = await asyncio.wait(
+            [start_task, shutdown_task],
+            return_when=asyncio.FIRST_COMPLETED
+        )
+        
+        # Cancel any remaining tasks
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            
     except KeyboardInterrupt:
         logger.info("Received keyboard interrupt")
     except Exception as e:
@@ -266,7 +313,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n👋 CircLights stopped by user")
+        print("\nCircLights stopped by user")
     except Exception as e:
-        print(f"❌ Failed to start CircLights: {e}")
+        print(f"Failed to start CircLights: {e}")
         sys.exit(1)

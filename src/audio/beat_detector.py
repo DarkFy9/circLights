@@ -4,6 +4,7 @@ Advanced beat detection and tempo analysis
 
 import numpy as np
 import logging
+import time
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 from collections import deque

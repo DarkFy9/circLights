@@ -1,0 +1,23 @@
+# Core Audio Processing (Windows-friendly)
+sounddevice==0.4.6
+librosa==0.10.1
+numpy==1.24.3
+scipy==1.11.2
+
+# Web Interface
+flask==2.3.3
+flask-socketio==5.3.6
+eventlet==0.33.3
+
+# WLED Communication
+requests==2.31.0
+zeroconf==0.112.0
+
+# Configuration & Utilities
+pyyaml==6.0.1
+colorama==0.4.6
+
+# Development & Testing (optional)
+pytest==7.4.2
+black==23.7.0
+flake8==6.1.0
