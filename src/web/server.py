@@ -54,6 +54,11 @@ class WebServer:
         self.clients = set()
         self.update_task = None
         
+        # Test pattern management
+        self.test_pattern_active = False
+        self.test_pattern_type = None
+        self.test_pattern_task = None
+        
         # Performance tracking
         self.last_update = 0.0
         self.update_rate = 30  # Hz for web updates (lower than LED updates)
@@ -317,24 +322,46 @@ class WebServer:
                     if 'effect_type' in data:
                         zone.effect_type = data['effect_type']
                         
-        @self.socketio.on('led_test')
-        def handle_led_test(data):
-            """Handle LED test pattern"""
+        @self.socketio.on('led_test_start')
+        def handle_led_test_start(data):
+            """Start persistent LED test pattern"""
             pattern = data.get('pattern', 'rainbow')
+            color = data.get('color', [255, 255, 255])  # Default white
+            flash_hz = data.get('flash_hz', 0)  # Default no flash
             
-            if pattern == 'rainbow':
-                self._test_rainbow_pattern()
-            elif pattern == 'white':
-                self._test_white_pattern()
-            elif pattern == 'off':
-                self.led_controller.clear_leds()
-                # Schedule LED update safely
-                try:
-                    loop = asyncio.get_event_loop()
-                    if not loop.is_closed():
-                        loop.create_task(self.led_controller.update_leds(force=True))
-                except Exception as e:
-                    logger.error(f"Failed to schedule LED update: {e}")
+            logger.info(f"Starting persistent LED test pattern: {pattern} (flash: {flash_hz}Hz)")
+            
+            # Check if we have a primary device
+            if not self.led_controller.primary_device:
+                logger.warning("No primary WLED device set for test pattern")
+                return
+            
+            if not self.led_controller.primary_device.online:
+                logger.warning(f"Primary device {self.led_controller.primary_device.ip} is not online")
+                return
+            
+            # Stop any existing test pattern
+            self._stop_test_pattern()
+            
+            # Start new persistent test pattern
+            self.test_pattern_active = True
+            self.test_pattern_type = pattern
+            
+            import threading
+            self.test_pattern_task = threading.Thread(
+                target=self._run_persistent_test_pattern,
+                args=(pattern, color, flash_hz),
+                daemon=True
+            )
+            self.test_pattern_task.start()
+            
+            logger.info(f"Started persistent {pattern} pattern on {self.led_controller.primary_device.ip}")
+            
+        @self.socketio.on('led_test_stop')
+        def handle_led_test_stop():
+            """Stop persistent LED test pattern"""
+            logger.info("Stopping persistent LED test pattern")
+            self._stop_test_pattern()
                 
     def _get_realtime_status(self) -> Dict[str, Any]:
         """Get real-time status for web interface"""
@@ -397,13 +424,13 @@ class WebServer:
             colors.append([int(r * 255), int(g * 255), int(b * 255)])
             
         self.led_controller.set_all_leds(np.array(colors))
-        # Schedule LED update safely
-        try:
-            loop = asyncio.get_event_loop()
-            if not loop.is_closed():
-                loop.create_task(self.led_controller.update_leds(force=True))
-        except Exception as e:
-            logger.error(f"Failed to schedule rainbow LED update: {e}")
+        # Send UDP data synchronously (like LedFx)
+        adjusted_data = (self.led_controller.led_data * (self.led_controller.brightness / 255)).astype(np.uint8)
+        success = self.led_controller._send_udp_data_sync(adjusted_data)
+        if success:
+            logger.info("Rainbow pattern sent to WLED successfully")
+        else:
+            logger.error("Failed to send rainbow pattern to WLED")
         
     def _test_white_pattern(self):
         """Test with white pattern"""
@@ -411,13 +438,13 @@ class WebServer:
         
         colors = np.full((self.led_controller.led_count, 3), 255, dtype=np.uint8)
         self.led_controller.set_all_leds(colors)
-        # Schedule LED update safely
-        try:
-            loop = asyncio.get_event_loop()
-            if not loop.is_closed():
-                loop.create_task(self.led_controller.update_leds(force=True))
-        except Exception as e:
-            logger.error(f"Failed to schedule white LED update: {e}")
+        # Send UDP data synchronously (like LedFx)
+        adjusted_data = (self.led_controller.led_data * (self.led_controller.brightness / 255)).astype(np.uint8)
+        success = self.led_controller._send_udp_data_sync(adjusted_data)
+        if success:
+            logger.info("White pattern sent to WLED successfully")
+        else:
+            logger.error("Failed to send white pattern to WLED")
         
     async def _realtime_update_loop(self):
         """Real-time update loop for web clients"""
@@ -564,10 +591,15 @@ class WebServer:
                     # Add device to controller
                     self.led_controller.add_device(device_name, wled_ip, 80, led_count)
                     
-                    # Mark device as online (sync version)
+                    # Mark device as online and set as primary
                     for device in self.led_controller.devices:
                         if device.ip == wled_ip:
                             device.online = True
+                            # Set as primary device for test patterns
+                            self.led_controller.primary_device = device
+                            self.led_controller.led_count = led_count
+                            self.led_controller._update_led_data_size()
+                            logger.info(f"Set {device_name} as primary WLED device")
                             break
                     
                     return {
@@ -590,3 +622,135 @@ class WebServer:
             return {'success': False, 'error': f'Connection failed: {str(e)}'}
         except Exception as e:
             return {'success': False, 'error': f'Unexpected error: {str(e)}'}
+            
+    def _stop_test_pattern(self):
+        """Stop any running test pattern"""
+        if self.test_pattern_active:
+            self.test_pattern_active = False
+            self.test_pattern_type = None
+            
+            # Wait for the thread to actually stop
+            if self.test_pattern_task and self.test_pattern_task.is_alive():
+                logger.info("Waiting for test pattern thread to stop...")
+                self.test_pattern_task.join(timeout=1.0)  # Wait up to 1 second
+                if self.test_pattern_task.is_alive():
+                    logger.warning("Test pattern thread did not stop gracefully")
+                else:
+                    logger.info("Test pattern thread stopped successfully")
+            
+            self.test_pattern_task = None
+            logger.info("Test pattern stopped")
+            
+    def _run_persistent_test_pattern(self, pattern, color=[255, 255, 255], flash_hz=0):
+        """Run a test pattern continuously until stopped"""
+        import time
+        import numpy as np
+        
+        logger.info(f"Running persistent {pattern} pattern (flash: {flash_hz}Hz)...")
+        
+        flash_state = True  # For flashing patterns
+        flash_interval = 1.0 / (flash_hz * 2) if flash_hz > 0 else 0  # Half period for on/off cycle
+        last_flash_time = time.time()
+        last_udp_time = time.time()
+        
+        while self.test_pattern_active and self.test_pattern_type == pattern:
+            try:
+                current_time = time.time()
+                pattern_changed = False
+                
+                # Handle flashing
+                if flash_hz > 0:
+                    if (current_time - last_flash_time) >= flash_interval:
+                        flash_state = not flash_state
+                        last_flash_time = current_time
+                        pattern_changed = True
+                else:
+                    # Reset flash state to "on" when not flashing
+                    if not flash_state:  # Only change if currently off
+                        flash_state = True
+                        pattern_changed = True
+                    
+                # Generate pattern data
+                if pattern == 'rainbow':
+                    colors = []
+                    for i in range(self.led_controller.led_count):
+                        hue = (i / max(1, self.led_controller.led_count - 1)) * 360
+                        # Simple HSV to RGB conversion
+                        c = 1.0  # saturation
+                        x = c * (1 - abs((hue / 60) % 2 - 1))
+                        
+                        if 0 <= hue < 60:
+                            r, g, b = c, x, 0
+                        elif 60 <= hue < 120:
+                            r, g, b = x, c, 0
+                        elif 120 <= hue < 180:
+                            r, g, b = 0, c, x
+                        elif 180 <= hue < 240:
+                            r, g, b = 0, x, c
+                        elif 240 <= hue < 300:
+                            r, g, b = x, 0, c
+                        else:
+                            r, g, b = c, 0, x
+                            
+                        final_color = [int(r * 255), int(g * 255), int(b * 255)]
+                        # Apply flashing
+                        if flash_hz > 0 and not flash_state:
+                            final_color = [0, 0, 0]
+                            
+                        colors.append(final_color)
+                        
+                    self.led_controller.set_all_leds(np.array(colors))
+                    
+                elif pattern == 'white':
+                    if flash_hz > 0 and not flash_state:
+                        colors = np.zeros((self.led_controller.led_count, 3), dtype=np.uint8)
+                    else:
+                        colors = np.full((self.led_controller.led_count, 3), 255, dtype=np.uint8)
+                    self.led_controller.set_all_leds(colors)
+                    
+                elif pattern == 'custom':
+                    if flash_hz > 0 and not flash_state:
+                        colors = np.zeros((self.led_controller.led_count, 3), dtype=np.uint8)
+                    else:
+                        colors = np.full((self.led_controller.led_count, 3), color, dtype=np.uint8)
+                    self.led_controller.set_all_leds(colors)
+                    
+                elif pattern == 'off':
+                    self.led_controller.clear_leds()
+                
+                # Send to WLED when pattern changes or periodically to prevent timeout
+                send_udp = pattern_changed or (current_time - last_udp_time) >= 2.0
+                
+                if send_udp:
+                    udp_data = bytearray()
+                    udp_data.append(0x02)  # Protocol: DRGB
+                    udp_data.append(0x05)  # Timeout: 5 seconds (longer for persistent)
+                    
+                    # Apply brightness and add LED data
+                    adjusted_data = (self.led_controller.led_data * (self.led_controller.brightness / 255)).astype(np.uint8)
+                    for r, g, b in adjusted_data:
+                        udp_data.extend([r, g, b])
+                    
+                    # Send UDP packet
+                    if self.led_controller.udp_socket and self.led_controller.primary_device:
+                        self.led_controller.udp_socket.sendto(
+                            udp_data, 
+                            (self.led_controller.primary_device.ip, 21324)
+                        )
+                        last_udp_time = current_time
+                
+                # Adjust sleep time based on flash rate
+                if flash_hz > 0:
+                    # For flashing, update more frequently to maintain smooth timing
+                    sleep_time = min(0.05, flash_interval / 2)  # At least 20 FPS for smooth flashing
+                else:
+                    # For static patterns, update less frequently but still check stop flag often
+                    sleep_time = 0.1  # Check stop flag every 100ms instead of 3 seconds
+                    
+                time.sleep(sleep_time)
+                
+            except Exception as e:
+                logger.error(f"Error in persistent test pattern: {e}")
+                break
+                
+        logger.info(f"Persistent {pattern} pattern ended")

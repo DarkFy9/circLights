@@ -378,37 +378,36 @@ class LEDController:
                 
         return False
         
-    async def _send_udp_data(self, led_data: np.ndarray):
-        """Send LED data via UDP for high performance"""
+    def _send_udp_data_sync(self, led_data: np.ndarray):
+        """Send LED data via UDP synchronously (like LedFx)"""
         if not self.primary_device or not self.udp_socket:
             return False
             
         try:
-            # WLED UDP protocol: [WARLS][timeout][start_index][data...]
+            # WLED UDP protocol: DRGB format (simpler and more reliable)
             udp_data = bytearray()
-            udp_data.extend(b'WARLS')  # Protocol identifier
-            udp_data.append(2)  # Timeout in seconds
-            udp_data.extend((0).to_bytes(2, 'big'))  # Start index (16-bit big endian)
+            udp_data.append(0x02)  # Protocol: DRGB
+            udp_data.append(0x01)  # Timeout: 1 second
             
             # Add LED data (RGB format)
             for r, g, b in led_data:
                 udp_data.extend([r, g, b])
             
-            # Send UDP packet
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.udp_socket.sendto(
-                    udp_data, 
-                    (self.primary_device.ip, 21324)  # WLED UDP port
-                )
-            )
+            # Send UDP packet synchronously (like LedFx does)
+            self.udp_socket.sendto(udp_data, (self.primary_device.ip, 21324))
             
-            logger.debug(f"Sent {len(udp_data)} bytes via UDP to {self.primary_device.ip}")
+            logger.info(f"Sent {len(udp_data)} bytes via UDP to {self.primary_device.ip}:21324")
             return True
             
         except Exception as e:
             logger.error(f"UDP send error: {e}")
             return False
+            
+    async def _send_udp_data(self, led_data: np.ndarray):
+        """Send LED data via UDP for high performance (async wrapper)"""
+        return await asyncio.get_event_loop().run_in_executor(
+            None, self._send_udp_data_sync, led_data
+        )
             
     def get_performance_stats(self) -> Dict[str, float]:
         """Get performance statistics"""

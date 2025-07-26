@@ -99,12 +99,36 @@
                         <input type="text" id="wled-ip" placeholder="192.168.1.100">
                         <button id="test-wled-connection" type="button">Test Connection</button>
                         <span id="wled-connection-status" class="connection-status"></span>
+                        <span id="wled-ping" class="ping-display"></span>
                     </div>
                     
                     <div class="control-group">
                         <button id="test-rainbow">Test Rainbow</button>
                         <button id="test-white">Test White</button>
                         <button id="test-off">Turn Off</button>
+                        <button id="stop-test" class="stop-btn">Stop Test</button>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="custom-color">Custom Color:</label>
+                        <input type="color" id="custom-color" value="#ff0000">
+                        <button id="test-custom-color">Test Custom</button>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="rgb-r">RGB Values:</label>
+                        <div class="rgb-inputs">
+                            <input type="number" id="rgb-r" min="0" max="255" value="255" placeholder="R">
+                            <input type="number" id="rgb-g" min="0" max="255" value="0" placeholder="G">
+                            <input type="number" id="rgb-b" min="0" max="255" value="0" placeholder="B">
+                            <button id="test-rgb-color">Test RGB</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="flash-hz">Flash Rate (Hz):</label>
+                        <input type="number" id="flash-hz" min="0" max="30" step="0.1" value="0" placeholder="0 = Off">
+                        <span class="flash-info">0 = No flash, 1-30 Hz = Flash rate</span>
                     </div>
                 </div>
                 

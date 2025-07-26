@@ -568,3 +568,60 @@ input[type="range"]::-moz-range-thumb {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* Stop Test Button */
+.stop-btn {
+    background: linear-gradient(45deg, #ff9800, #f57c00);
+    color: white;
+}
+
+.stop-btn:hover {
+    background: linear-gradient(45deg, #f57c00, #ff9800);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
+}
+
+/* Ping Display */
+.ping-display {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 0.8rem;
+    color: #4CAF50;
+    font-weight: 600;
+}
+
+/* RGB Inputs */
+.rgb-inputs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.rgb-inputs input[type="number"] {
+    width: 60px;
+    padding: 4px 6px;
+}
+
+.rgb-inputs button {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+/* Color Input */
+input[type="color"] {
+    width: 50px;
+    height: 40px;
+    padding: 2px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+/* Flash Info */
+.flash-info {
+    display: block;
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 2px;
+    font-style: italic;
+}

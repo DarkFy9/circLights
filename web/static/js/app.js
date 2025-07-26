@@ -110,6 +110,24 @@ class CircLightsApp {
         document.getElementById('test-rainbow')?.addEventListener('click', () => this.testLEDs('rainbow'));
         document.getElementById('test-white')?.addEventListener('click', () => this.testLEDs('white'));
         document.getElementById('test-off')?.addEventListener('click', () => this.testLEDs('off'));
+        document.getElementById('stop-test')?.addEventListener('click', () => this.stopTest());
+        
+        // Custom color test buttons
+        document.getElementById('test-custom-color')?.addEventListener('click', () => this.testCustomColor());
+        document.getElementById('test-rgb-color')?.addEventListener('click', () => this.testRGBColor());
+        
+        // Update RGB inputs when color picker changes
+        document.getElementById('custom-color')?.addEventListener('change', (e) => this.updateRGBFromColor(e.target.value));
+        
+        // Validate flash Hz input
+        document.getElementById('flash-hz')?.addEventListener('input', (e) => {
+            const value = parseFloat(e.target.value);
+            if (value > 30) {
+                e.target.value = 30;
+            } else if (value < 0) {
+                e.target.value = 0;
+            }
+        });
         
         // WLED connection test
         document.getElementById('test-wled-connection')?.addEventListener('click', this.testWLEDConnection.bind(this));
@@ -537,7 +555,70 @@ class CircLightsApp {
     }
     
     testLEDs(pattern) {
-        this.socket.emit('led_test', { pattern });
+        // Get current flash rate for all patterns
+        const flashHz = parseFloat(document.getElementById('flash-hz').value) || 0;
+        
+        // Start persistent test pattern with flash rate
+        this.socket.emit('led_test_start', { 
+            pattern: pattern,
+            flash_hz: flashHz
+        });
+    }
+    
+    stopTest() {
+        // Stop persistent test pattern
+        this.socket.emit('led_test_stop');
+    }
+    
+    testCustomColor() {
+        const colorValue = document.getElementById('custom-color').value;
+        const flashHz = parseFloat(document.getElementById('flash-hz').value) || 0;
+        
+        // Convert hex color to RGB
+        const rgb = this.hexToRgb(colorValue);
+        
+        this.socket.emit('led_test_start', { 
+            pattern: 'custom',
+            color: rgb,
+            flash_hz: flashHz
+        });
+    }
+    
+    testRGBColor() {
+        const r = parseInt(document.getElementById('rgb-r').value) || 0;
+        const g = parseInt(document.getElementById('rgb-g').value) || 0;
+        const b = parseInt(document.getElementById('rgb-b').value) || 0;
+        const flashHz = parseFloat(document.getElementById('flash-hz').value) || 0;
+        
+        // Update color picker to match RGB values
+        const hexColor = this.rgbToHex(r, g, b);
+        document.getElementById('custom-color').value = hexColor;
+        
+        this.socket.emit('led_test_start', { 
+            pattern: 'custom',
+            color: [r, g, b],
+            flash_hz: flashHz
+        });
+    }
+    
+    updateRGBFromColor(hexColor) {
+        const rgb = this.hexToRgb(hexColor);
+        document.getElementById('rgb-r').value = rgb[0];
+        document.getElementById('rgb-g').value = rgb[1];
+        document.getElementById('rgb-b').value = rgb[2];
+    }
+    
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? [
+            parseInt(result[1], 16),
+            parseInt(result[2], 16),
+            parseInt(result[3], 16)
+        ] : [0, 0, 0];
+    }
+    
+    rgbToHex(r, g, b) {
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     }
     
     // Zone Management
@@ -799,11 +880,13 @@ class CircLightsApp {
     async testWLEDConnection() {
         const wledIP = document.getElementById('wled-ip').value;
         const statusElement = document.getElementById('wled-connection-status');
+        const pingElement = document.getElementById('wled-ping');
         const button = document.getElementById('test-wled-connection');
         
         if (!wledIP) {
             statusElement.textContent = 'Please enter an IP address';
             statusElement.className = 'connection-status error';
+            pingElement.textContent = '';
             return;
         }
         
@@ -812,13 +895,19 @@ class CircLightsApp {
         button.textContent = 'Testing...';
         statusElement.textContent = 'Testing connection...';
         statusElement.className = 'connection-status testing';
+        pingElement.textContent = 'Measuring ping...';
         
         try {
+            const startTime = performance.now();
+            
             const response = await fetch('/api/led/test-connection', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ wled_ip: wledIP })
             });
+            
+            const endTime = performance.now();
+            const pingTime = Math.round(endTime - startTime);
             
             const result = await response.json();
             
@@ -826,6 +915,7 @@ class CircLightsApp {
                 const device = result.device_info;
                 statusElement.innerHTML = `✓ Connected: ${device.name} (${device.led_count} LEDs, v${device.version})`;
                 statusElement.className = 'connection-status success';
+                pingElement.textContent = `${pingTime}ms`;
                 
                 // Update LED count if returned by device
                 const ledCountInput = document.getElementById('led-count');
@@ -835,12 +925,14 @@ class CircLightsApp {
             } else {
                 statusElement.textContent = `✗ Failed: ${result.error}`;
                 statusElement.className = 'connection-status error';
+                pingElement.textContent = 'N/A';
             }
             
         } catch (error) {
             console.error('Error testing WLED connection:', error);
             statusElement.textContent = '✗ Connection test failed';
             statusElement.className = 'connection-status error';
+            pingElement.textContent = 'N/A';
         } finally {
             // Reset button
             button.disabled = false;
